@@ -6,6 +6,9 @@
 #include <pulse/simple.h>
 #include <pulse/error.h>
 #include "alphabet.h"
+#include <raylib.h>
+#define RAYGUI_IMPLEMENTATION
+#include <raygui.h>
 
 #define SAMPLE_RATE 44100
 #define DURATION 0.5
@@ -19,33 +22,36 @@ const LetterSound* findLetter(char c) {
     return nullptr;
 }
 
-void playLetter(const LetterSound *ls, pa_simple *s) {
+void playText(const char *text, pa_simple *s) {
     int error;
-    const int samples = SAMPLE_RATE * DURATION;
-    short *buffer = malloc(samples * sizeof(short));
+    const int totalSamples = (int)(strlen(text) * DURATION * SAMPLE_RATE);
+    short *buffer = malloc(totalSamples * sizeof(short));
+    int pos = 0;
 
-    for (int i = 0; i < samples; i++) {
-        const double t = (double)i / SAMPLE_RATE;
-        double sample = 0.0;
+    for (int i = 0; i < strlen(text); i++) {
+        const LetterSound *ls = findLetter(text[i]);
+        if (!ls) continue;
 
-        for (int n = 0; n < ls->noteCount; n++) {
-            const double freq = noteFrequencies[ ls->notes[n] ];
-            sample += sin(2 * M_PI * freq * t);
+        for (int j = 0; j < SAMPLE_RATE * DURATION; j++, pos++) {
+            const double t = (double)pos / SAMPLE_RATE;
+            double sample = 0.0;
+
+            for (int n = 0; n < ls->noteCount; n++) {
+                const double freq = noteFrequencies[ls->notes[n]];
+                sample += sin(2*M_PI*freq*t);
+
+            }
+
+            sample /= (ls->noteCount * 1.75);
+            buffer[pos] = (short)(sample * 32767 * 0.3);
         }
-
-        sample /= ls->noteCount;
-        buffer[i] = (short)(sample * 32767 * 0.3);
     }
 
-    pa_simple_write(s, buffer, samples * sizeof(short), &error);
+    pa_simple_write(s, buffer, totalSamples * sizeof(short), &error);
     free(buffer);
 }
 
 int main(const int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("Uso: %s \"palabra\"\n", argv[0]);
-        return 1;
-    }
 
     static const pa_sample_spec ss = {
         .format = PA_SAMPLE_S16LE,
@@ -60,14 +66,27 @@ int main(const int argc, char *argv[]) {
         return 1;
     }
 
-    char *text = argv[1];
-    for (int i = 0; i < strlen(text); i++) {
-        const LetterSound *ls = findLetter(text[i]);
-        if (ls) {
-            printf("Playing %c...\n", text[i]);
-            playLetter(ls, s);
+    InitWindow(400, 50, "Vocab2Note");
+    SetTraceLogLevel(LOG_WARNING);
+    GuiSetStyle(DEFAULT, TEXT_SIZE, 40);
+
+    char text[50] = "";
+
+    while (!WindowShouldClose()) {
+
+        BeginDrawing();
+
+        ClearBackground(WHITE);
+
+        if (GuiTextBox((Rectangle){0, 0, 400, 50}, text, 50, true)) {
+            playText(text, s);
         }
+
+        EndDrawing();
+
     }
+
+    CloseWindow();
 
     pa_simple_drain(s, &error);
     pa_simple_free(s);
