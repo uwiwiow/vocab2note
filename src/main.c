@@ -9,9 +9,13 @@
 #include <raylib.h>
 #define RAYGUI_IMPLEMENTATION
 #include <raygui.h>
+#include <pthread.h>
+#include <stdatomic.h>
 
 #define SAMPLE_RATE 44100
 #define DURATION 0.5
+
+atomic_bool play_text_running = false;
 
 const LetterSound* findLetter(char c) {
     c = (char)toupper(c);
@@ -22,14 +26,21 @@ const LetterSound* findLetter(char c) {
     return nullptr;
 }
 
-void playText(const char *text, pa_simple *s) {
+typedef struct play_text_args{
+    const char *text;
+    pa_simple *s;
+}play_text_args;
+
+void* playText(void* arg) {
+    const play_text_args *args = arg;
+    if (arg == nullptr) return nullptr;
     int error;
-    const int totalSamples = (int)(strlen(text) * DURATION * SAMPLE_RATE);
+    const int totalSamples = (int)(strlen(args->text) * DURATION * SAMPLE_RATE);
     short *buffer = malloc(totalSamples * sizeof(short));
     int pos = 0;
 
-    for (int i = 0; i < strlen(text); i++) {
-        const LetterSound *ls = findLetter(text[i]);
+    for (int i = 0; i < strlen(args->text); i++) {
+        const LetterSound *ls = findLetter(args->text[i]);
         if (!ls) continue;
 
         for (int j = 0; j < SAMPLE_RATE * DURATION; j++, pos++) {
@@ -47,8 +58,10 @@ void playText(const char *text, pa_simple *s) {
         }
     }
 
-    pa_simple_write(s, buffer, totalSamples * sizeof(short), &error);
+    pa_simple_write(args->s, buffer, totalSamples * sizeof(short), &error);
     free(buffer);
+    play_text_running = false;
+    return nullptr;
 }
 
 int main(const int argc, char *argv[]) {
@@ -70,6 +83,9 @@ int main(const int argc, char *argv[]) {
     SetTraceLogLevel(LOG_WARNING);
     GuiSetStyle(DEFAULT, TEXT_SIZE, 40);
 
+    pthread_t play_text_pthread;
+    play_text_args *args = malloc(sizeof *args);
+
     char text[50] = "";
 
     while (!WindowShouldClose()) {
@@ -79,7 +95,13 @@ int main(const int argc, char *argv[]) {
         ClearBackground(WHITE);
 
         if (GuiTextBox((Rectangle){0, 0, 400, 50}, text, 50, true)) {
-            playText(text, s);
+            args->text = text;
+            args->s = s;
+
+            bool expected = false;
+            if (atomic_compare_exchange_strong(&play_text_running, &expected, true)) {
+                pthread_create(&play_text_pthread, NULL, playText, args);
+            }
         }
 
         EndDrawing();
@@ -87,6 +109,8 @@ int main(const int argc, char *argv[]) {
     }
 
     CloseWindow();
+
+    free(args);
 
     pa_simple_drain(s, &error);
     pa_simple_free(s);
