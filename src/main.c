@@ -16,27 +16,40 @@
 #define DURATION 0.5
 
 atomic_bool play_text_running = false;
+atomic_bool play_tiles_running = false;
+atomic_llong startTime = 0;
 pa_simple *sound_stream = nullptr;
 
-const LetterSound* findLetter(char c) {
+int findLetter(char c) {
     c = (char)toupper(c);
     for (int i = 0; i < sizeof(alphabet)/sizeof(alphabet[0]); i++) {
         if (alphabet[i].letter == c)
-            return &alphabet[i];
+            return i;
     }
-    return nullptr;
+    return -1;
+}
+
+long long nowMs(void) {
+    return (long long)(GetTime() * 1000.0);
 }
 
 void* playText(void* arg) {
-    const char* text = arg;
+    const int* textIndex = arg;
     int error;
-    const int totalSamples = (int)(strlen(text) * DURATION * SAMPLE_RATE);
+    int text_length = 0;
+    for (int i = 0; i < 50; i++) {
+        if (textIndex[i] == -1) {
+            text_length = i;
+            break;
+        }
+        text_length = 50;
+    }
+    const int totalSamples = (int)(text_length * DURATION * SAMPLE_RATE);
     short *buffer = malloc(totalSamples * sizeof(short));
     int pos = 0;
 
-    for (int i = 0; i < strlen(text); i++) {
-        const LetterSound *ls = findLetter(text[i]);
-        if (!ls) continue;
+    for (int i = 0; i < text_length; i++) {
+        const LetterSound *ls = &alphabet[textIndex[i]];
 
         for (int j = 0; j < SAMPLE_RATE * DURATION; j++, pos++) {
             const double t = (double)pos / SAMPLE_RATE;
@@ -53,16 +66,40 @@ void* playText(void* arg) {
         }
     }
 
+    long long localStart = nowMs();
+    atomic_store(&startTime, localStart);
+    play_tiles_running = true;
     pa_simple_write(sound_stream, buffer, totalSamples * sizeof(short), &error);
     free(buffer);
     play_text_running = false;
     return nullptr;
 }
 
-void drawWhites() {
+void drawWhites(int* textIndex) {
+    bool expected = true;
+    if (atomic_compare_exchange_strong(&play_tiles_running, &expected, true)) {
+        int text_length = 0;
+        for (int i = 0; i < 50; i++) {
+            if (textIndex[i] == -1) {
+                text_length = i;
+                break;
+            }
+            text_length = 50;
+        }
+        double t0 = atomic_load(&startTime);
+        float t = GetTime() - (float) t0 / 1000.0;
+        if (text_length * DURATION > t) play_tiles_running = false;
+        for (int j = 0; j < text_length; j++) {
+            if (t >= j*DURATION-0.5 && t < j*DURATION-0.5 + DURATION) {
+                noteActive[j] = true;
+            } else
+                noteActive[j] = false;
+        }
+    }
+
     for (int i = 0; i <= 7; i++) {
-        DrawRectangle(i * 60, 50, 60, 200, LIGHTGRAY);
-        DrawRectangleLines(i * 60, 50, 60, 200, GRAY);
+        DrawRectangle(i * 60, 50, 60, 200, noteActive[i]? GRAY: LIGHTGRAY);
+        DrawRectangleLines(i * 60, 50, 60, 200, DARKGRAY);
     }
 }
 
@@ -88,6 +125,7 @@ int main(const int argc, char *argv[]) {
     pthread_t play_text_pthread;
 
     char text[50] = "";
+    int textIndex[50] = {};
 
     while (!WindowShouldClose()) {
 
@@ -95,14 +133,22 @@ int main(const int argc, char *argv[]) {
 
         ClearBackground(WHITE);
 
-        drawWhites();
-
         if (GuiTextBox((Rectangle){0, 0, 420, 50}, text, 50, true)) {
+            for (int i = 0; i < strlen(text); i++)
+                textIndex[i] = findLetter(text[i]);
+
+            if (strlen(text) < 50)
+                textIndex[strlen(text)] = -1;
+
             bool expected = false;
             if (atomic_compare_exchange_strong(&play_text_running, &expected, true)) {
-                pthread_create(&play_text_pthread, NULL, playText, text);
+                pthread_create(&play_text_pthread, nullptr, playText, textIndex);
             }
         }
+
+        drawWhites(textIndex);
+
+        DrawFPS(10, 10);
 
         EndDrawing();
 
