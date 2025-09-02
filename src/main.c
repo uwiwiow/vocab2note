@@ -11,6 +11,7 @@
 #include <raygui.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include "wav.h"
 
 #define SAMPLE_RATE 44100
 #define DURATION 0.5
@@ -53,6 +54,7 @@ void* playText(void* arg) {
         }
     }
 
+    saveWav(TextFormat("%s.wav",text), buffer, totalSamples);
     pa_simple_write(sound_stream, buffer, totalSamples * sizeof(short), &error);
     free(buffer);
     play_text_running = false;
@@ -81,7 +83,7 @@ int main(const int argc, char *argv[]) {
         return 1;
     }
 
-    InitWindow(420, 250, "Vocab2Note");
+    InitWindow(420, 50, "Vocab2Note");
     SetTraceLogLevel(LOG_WARNING);
     GuiSetStyle(DEFAULT, TEXT_SIZE, 40);
 
@@ -95,7 +97,7 @@ int main(const int argc, char *argv[]) {
 
         ClearBackground(WHITE);
 
-        drawWhites();
+        // drawWhites();
 
         if (GuiTextBox((Rectangle){0, 0, 420, 50}, text, 50, true)) {
             bool expected = false;
