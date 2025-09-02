@@ -14,7 +14,7 @@
 #include "wav.h"
 
 #define SAMPLE_RATE 44100
-#define DURATION 0.1
+#define DURATION 0.5
 
 atomic_bool play_text_running = false;
 bool play_tiles_running = false;
@@ -30,16 +30,36 @@ int findLetter(char c) {
     return -1;
 }
 
-char* indexToText(const int* textIndex) {
-    static char ret[50];
+
+void saveAudio(const int* textIndex, char* text) {
+    const int text_length = strlen(text);
+    if (text_length < 1) return;
+    const int totalSamples = (int)(text_length * DURATION * SAMPLE_RATE);
+    short *buffer = malloc(totalSamples * sizeof(short));
     int pos = 0;
 
-    for (int i = 0; i < 50; i++) {
-        if (textIndex[i] == -1) break;
-        ret[pos++] = alphabet[textIndex[i]].letter;
+    for (int i = 0; i < text_length; i++) {
+        const LetterSound *ls = &alphabet[textIndex[i]];
+
+        for (int j = 0; j < SAMPLE_RATE * DURATION; j++, pos++) {
+            const double t = (double)pos / SAMPLE_RATE;
+            double sample = 0.0;
+
+            for (int n = 0; n < ls->noteCount; n++) {
+                const double freq = noteFrequencies[ls->notes[n]];
+                sample += sin(2*M_PI*freq*t);
+
+            }
+
+            sample /= (ls->noteCount * 1.75);
+            buffer[pos] = (short)(sample * 32767 * 0.3);
+        }
     }
-    return ret;
+
+    saveWav(TextFormat("%s.wav",text), buffer, totalSamples);
+    free(buffer);
 }
+
 
 long long nowMs(void) {
     return (long long)(GetTime() * 1000.0);
@@ -81,7 +101,6 @@ void* playText(void* arg) {
     long long localStart = nowMs();
     atomic_store(&startTime, localStart);
     play_tiles_running = true;
-    saveWav(TextFormat("%s.wav",indexToText(textIndex)), buffer, totalSamples);
     pa_simple_write(sound_stream, buffer, totalSamples * sizeof(short), &error);
     free(buffer);
     play_text_running = false;
@@ -152,6 +171,10 @@ int main(const int argc, char *argv[]) {
     int textIndex[50] = {};
 
     while (!WindowShouldClose()) {
+
+        if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_S)) {
+            saveAudio(textIndex, text);
+        }
 
         BeginDrawing();
 
