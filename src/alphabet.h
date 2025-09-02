@@ -23,6 +23,21 @@ static constexpr double noteFrequencies[] = {
     [NOTE_B]  = 493.88,
 };
 
+static bool noteActive[] = {
+    [NOTE_C]  = false,
+    [NOTE_D]  = false,
+    [NOTE_E]  = false,
+    [NOTE_F]  = false,
+    [NOTE_G]  = false,
+    [NOTE_A]  = false,
+    [NOTE_B]  = false,
+    [NOTE_Cs] = false,
+    [NOTE_Ds] = false,
+    [NOTE_Fs] = false,
+    [NOTE_Gs] = false,
+    [NOTE_As] = false,
+};
+
 typedef struct {
     char letter;
     int notes[3];
