@@ -104,22 +104,14 @@ void drawWhites(int* textIndex) {
 
     for (int i = 0; i < 12; i++) {
         if (i < 7) {
-            DrawRectangle(i * 60, 50, 60, 200, noteActive[i]? GRAY: LIGHTGRAY);
+            DrawRectangle(i * 60, 50, 60, 200, noteActive[i]? LIGHTGRAY: WHITE);
             DrawRectangleLines(i * 60, 50, 60, 200, DARKGRAY);
             continue;
         }
-        DrawRectangle(i-7 -30 * 60, 70, 50, 60, noteActive[i]? BLACK: DARKGRAY);
+        DrawRectangle((( (i-6 > 2? i+1 : i) -6) * 60)-20, 50, 40, 120, noteActive[i]? DARKGRAY: BLACK);
+        DrawRectangleLines((( (i-6 > 2? i+1 : i) -6) * 60)-20, 50, 40, 120, DARKGRAY);
     }
 
-    // for (int i = 0; i < 7; i++) {
-    //     DrawRectangle(i * 60, 50, 60, 200, noteActive[i]? GRAY: LIGHTGRAY);
-    //     DrawRectangleLines(i * 60, 50, 60, 200, DARKGRAY);
-    // }
-    //
-    // for (int i = 7; i < 12; i++) {
-    //     if (i-7 != 0 && i-7 != 3)
-    //         DrawRectangle(i -30 * 60, 70, 50, 60, noteActive[i]? BLACK: DARKGRAY);
-    // }
 }
 
 int main(const int argc, char *argv[]) {
