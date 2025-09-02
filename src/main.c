@@ -16,7 +16,7 @@
 #define DURATION 0.5
 
 atomic_bool play_text_running = false;
-atomic_bool play_tiles_running = false;
+bool play_tiles_running = false;
 atomic_llong startTime = 0;
 pa_simple *sound_stream = nullptr;
 
@@ -76,8 +76,7 @@ void* playText(void* arg) {
 }
 
 void drawWhites(int* textIndex) {
-    bool expected = true;
-    if (atomic_compare_exchange_strong(&play_tiles_running, &expected, true)) {
+    if (play_tiles_running) {
         int text_length = 0;
         for (int i = 0; i < 50; i++) {
             if (textIndex[i] == -1) {
@@ -88,19 +87,39 @@ void drawWhites(int* textIndex) {
         }
         double t0 = atomic_load(&startTime);
         float t = GetTime() - (float) t0 / 1000.0;
-        if (text_length * DURATION > t) play_tiles_running = false;
         for (int j = 0; j < text_length; j++) {
-            if (t >= j*DURATION-0.5 && t < j*DURATION-0.5 + DURATION) {
-                noteActive[j] = true;
-            } else
-                noteActive[j] = false;
+            if (t >= j*DURATION && t < j*DURATION + DURATION) {
+                noteActive[alphabet[textIndex[j]].notes[0]] = true;
+                if (alphabet[textIndex[j]].noteCount == 1) break;
+                noteActive[alphabet[textIndex[j]].notes[1]] = true;
+                noteActive[alphabet[textIndex[j]].notes[2]] = true;
+                break;
+            }
+            noteActive[alphabet[textIndex[j]].notes[0]] = false;
+            if (alphabet[textIndex[j]].noteCount == 1) continue;
+            noteActive[alphabet[textIndex[j]].notes[1]] = false;
+            noteActive[alphabet[textIndex[j]].notes[2]] = false;
         }
     }
 
-    for (int i = 0; i <= 7; i++) {
-        DrawRectangle(i * 60, 50, 60, 200, noteActive[i]? GRAY: LIGHTGRAY);
-        DrawRectangleLines(i * 60, 50, 60, 200, DARKGRAY);
+    for (int i = 0; i < 12; i++) {
+        if (i < 7) {
+            DrawRectangle(i * 60, 50, 60, 200, noteActive[i]? GRAY: LIGHTGRAY);
+            DrawRectangleLines(i * 60, 50, 60, 200, DARKGRAY);
+            continue;
+        }
+        DrawRectangle(i-7 -30 * 60, 70, 50, 60, noteActive[i]? BLACK: DARKGRAY);
     }
+
+    // for (int i = 0; i < 7; i++) {
+    //     DrawRectangle(i * 60, 50, 60, 200, noteActive[i]? GRAY: LIGHTGRAY);
+    //     DrawRectangleLines(i * 60, 50, 60, 200, DARKGRAY);
+    // }
+    //
+    // for (int i = 7; i < 12; i++) {
+    //     if (i-7 != 0 && i-7 != 3)
+    //         DrawRectangle(i -30 * 60, 70, 50, 60, noteActive[i]? BLACK: DARKGRAY);
+    // }
 }
 
 int main(const int argc, char *argv[]) {
@@ -118,8 +137,8 @@ int main(const int argc, char *argv[]) {
         return 1;
     }
 
-    InitWindow(420, 250, "Vocab2Note");
     SetTraceLogLevel(LOG_WARNING);
+    InitWindow(420, 250, "Vocab2Note");
     GuiSetStyle(DEFAULT, TEXT_SIZE, 40);
 
     pthread_t play_text_pthread;
