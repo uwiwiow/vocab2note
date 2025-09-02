@@ -11,6 +11,7 @@
 #include <raygui.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include "wav.h"
 
 #define SAMPLE_RATE 44100
 #define DURATION 0.5
@@ -69,6 +70,7 @@ void* playText(void* arg) {
     long long localStart = nowMs();
     atomic_store(&startTime, localStart);
     play_tiles_running = true;
+    saveWav(TextFormat("%s.wav",text), buffer, totalSamples);
     pa_simple_write(sound_stream, buffer, totalSamples * sizeof(short), &error);
     free(buffer);
     play_text_running = false;
