@@ -14,7 +14,7 @@
 #include "wav.h"
 
 #define SAMPLE_RATE 44100
-#define DURATION 0.5
+#define DURATION 0.1
 
 atomic_bool play_text_running = false;
 bool play_tiles_running = false;
@@ -28,6 +28,17 @@ int findLetter(char c) {
             return i;
     }
     return -1;
+}
+
+char* indexToText(const int* textIndex) {
+    static char ret[50];
+    int pos = 0;
+
+    for (int i = 0; i < 50; i++) {
+        if (textIndex[i] == -1) break;
+        ret[pos++] = alphabet[textIndex[i]].letter;
+    }
+    return ret;
 }
 
 long long nowMs(void) {
@@ -70,7 +81,7 @@ void* playText(void* arg) {
     long long localStart = nowMs();
     atomic_store(&startTime, localStart);
     play_tiles_running = true;
-    saveWav(TextFormat("%s.wav",text), buffer, totalSamples);
+    saveWav(TextFormat("%s.wav",indexToText(textIndex)), buffer, totalSamples);
     pa_simple_write(sound_stream, buffer, totalSamples * sizeof(short), &error);
     free(buffer);
     play_text_running = false;
